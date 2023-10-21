@@ -46,6 +46,20 @@ type MmapInfo = std::marker::PhantomData<()>;
 use crate::io::{ReadVolatile, WriteVolatile};
 use copy_slice_impl::{copy_from_volatile_slice, copy_to_volatile_slice};
 
+#[cfg(unix)]
+mod plat {
+    pub const PROT_READ: i32 = libc::PROT_READ;
+    pub const PROT_WRITE: i32 = libc::PROT_WRITE;
+}
+
+#[cfg(windows)]
+mod plat {
+    // These values aren't actually used unless we're on xen, but this crate sucks and never considered the possibility
+    // that anyone off of unix would use it.
+    pub const PROT_READ: i32 = 0x1;
+    pub const PROT_WRITE: i32 = 0x2;
+}
+
 /// `VolatileMemory` related errors.
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
@@ -332,7 +346,7 @@ impl PtrGuard {
     }
 
     fn read(mmap: Option<&MmapInfo>, addr: *mut u8, len: usize) -> Self {
-        Self::new(mmap, addr, libc::PROT_READ, len)
+        Self::new(mmap, addr, plat::PROT_READ, len)
     }
 
     /// Returns a non-mutable pointer to the beginning of the slice.
@@ -352,7 +366,7 @@ pub struct PtrGuardMut(PtrGuard);
 #[allow(clippy::len_without_is_empty)]
 impl PtrGuardMut {
     fn write(mmap: Option<&MmapInfo>, addr: *mut u8, len: usize) -> Self {
-        Self(PtrGuard::new(mmap, addr, libc::PROT_WRITE, len))
+        Self(PtrGuard::new(mmap, addr, plat::PROT_WRITE, len))
     }
 
     /// Returns a mutable pointer to the beginning of the slice. Mutable accesses performed
@@ -1632,14 +1646,17 @@ mod tests {
     use super::*;
     use std::alloc::Layout;
 
+    #[cfg(unix)]
     use std::fs::File;
     use std::mem::size_of_val;
+    #[cfg(unix)]
     use std::path::Path;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Barrier};
     use std::thread::spawn;
 
     use matches::assert_matches;
+    #[cfg(unix)]
     use vmm_sys_util::tempfile::TempFile;
 
     use crate::bitmap::tests::{
@@ -2106,6 +2123,7 @@ mod tests {
         assert!(s.read_obj::<u16>(core::usize::MAX).is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn mem_read_and_write() {
         let mut backing = vec![0u8; 5];

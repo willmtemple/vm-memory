@@ -7,6 +7,7 @@ use crate::bitmap::BitmapSlice;
 use crate::volatile_memory::copy_slice_impl::{copy_from_volatile_slice, copy_to_volatile_slice};
 use crate::{VolatileMemoryError, VolatileSlice};
 use std::io::ErrorKind;
+#[cfg(unix)]
 use std::os::fd::AsRawFd;
 
 /// A version of the standard library's [`Read`] trait that operates on volatile memory instead of
@@ -112,6 +113,7 @@ pub trait WriteVolatile {
 // blanket implementation would prevent us from providing implementations for `&mut [u8]` below, as
 // "an upstream crate could implement AsRawFd for &mut [u8]`.
 
+#[cfg(unix)]
 macro_rules! impl_read_write_volatile_for_raw_fd {
     ($raw_fd_ty:ty) => {
         impl ReadVolatile for $raw_fd_ty {
@@ -134,15 +136,20 @@ macro_rules! impl_read_write_volatile_for_raw_fd {
     };
 }
 
+#[cfg(unix)]
 impl_read_write_volatile_for_raw_fd!(std::fs::File);
+#[cfg(unix)]
 impl_read_write_volatile_for_raw_fd!(std::os::unix::net::UnixStream);
+#[cfg(unix)]
 impl_read_write_volatile_for_raw_fd!(std::os::fd::OwnedFd);
+#[cfg(unix)]
 impl_read_write_volatile_for_raw_fd!(std::os::fd::BorrowedFd<'_>);
 
-/// Tries to do a single `read` syscall on the provided file descriptor, storing the data raed in
+/// Tries to do a single `read` syscall on the provided file descriptor, storing the data read in
 /// the given [`VolatileSlice`].
 ///
 /// Returns the numbers of bytes read.
+#[cfg(unix)]
 fn read_volatile_raw_fd<Fd: AsRawFd>(
     raw_fd: &mut Fd,
     buf: &mut VolatileSlice<impl BitmapSlice>,
@@ -173,6 +180,7 @@ fn read_volatile_raw_fd<Fd: AsRawFd>(
 /// data stored in the given [`VolatileSlice`].
 ///
 /// Returns the numbers of bytes written.
+#[cfg(unix)]
 fn write_volatile_raw_fd<Fd: AsRawFd>(
     raw_fd: &mut Fd,
     buf: &VolatileSlice<impl BitmapSlice>,
@@ -275,7 +283,10 @@ impl ReadVolatile for &[u8] {
 mod tests {
     use crate::io::{ReadVolatile, WriteVolatile};
     use crate::{VolatileMemoryError, VolatileSlice};
-    use std::io::{ErrorKind, Read, Seek, Write};
+    use std::io::ErrorKind;
+    #[cfg(unix)]
+    use std::io::{Read, Seek, Write};
+    #[cfg(unix)]
     use vmm_sys_util::tempfile::TempFile;
 
     // ---- Test ReadVolatile for &[u8] ----
@@ -312,6 +323,7 @@ mod tests {
     }
 
     // ---- Test ReadVolatile for File ----
+    #[cfg(unix)]
     fn read_4_bytes_from_file(source: Vec<u8>, expected_output: [u8; 5]) {
         let mut temp_file = TempFile::new().unwrap().into_file();
         temp_file.write_all(source.as_ref()).unwrap();
@@ -344,6 +356,7 @@ mod tests {
         assert_eq!(&memory, &expected_output);
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_read_volatile() {
         let test_cases = [
@@ -394,6 +407,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     // ---- Test ẂriteVolatile for File works ----
     fn write_5_bytes_to_file(mut source: Vec<u8>) {
         // Test write_volatile for File works
@@ -427,6 +441,7 @@ mod tests {
         assert_eq!(temp_file.read(&mut [0u8]).unwrap(), 0);
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_write_volatile() {
         let test_cases = [

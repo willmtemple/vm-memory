@@ -1159,6 +1159,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn read_to_and_write_from_mem() {
         let f = TempFile::new().unwrap().into_file();
